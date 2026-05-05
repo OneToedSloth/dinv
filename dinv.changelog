@@ -2,6 +2,26 @@
 dbot.changelog = {}
 
 
+dbot.changelog[3.0079] =
+{
+  { change = drlDbotChangeLogTypeFix,
+    desc   = [[Sync SQLite on every invmon event so in-memory item state
+           changes survive without a manual refresh.  The SQLite migration
+           hooked persistence into inv.items.add/remove/identify, but
+           setField/setStatField mutations driven by the invmon trigger
+           (location moves, container puts/gets, vault and keyring
+           shuffles, wear/remove) never reached disk.  The most visible
+           symptom was "dinv consume buy" leaving SQL-backed counts stale
+           until the next "dinv refresh"; less visible but equally broken:
+           every container move left objLoc, homeContainer, and container
+           holding stats out of sync between memory and disk.
+           inv.items.trigger.invmon now calls dinv_db.saveItem at the end
+           of the handler for both the moved item and (for actions 5/6)
+           the affected container, gated to skip removed items and
+           brand-new stubs.]]
+  }
+}
+
 dbot.changelog[3.0078] =
 {
   { change = drlDbotChangeLogTypeFix,

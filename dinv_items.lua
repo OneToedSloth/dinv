@@ -6040,16 +6040,32 @@ function inv.items.trigger.invmon(action, objId, containerId, wearLoc)
   end -- if
 
   -- If we updated a container's stats by adding or removing an item and if the container is not
-  -- already in line to be re-identified, update the container's stats now.  We don't bother saving
-  -- this state because even if mushclient crashes before we save the state, the container's stats
-  -- will be re-read and updated automatically the next time the plugin is loaded.  There's no 
-  -- reason to pay for the overhead of writing out the inventory table state right now.
+  -- already in line to be re-identified, update the container's stats now.
   if ((action == invmonActionTakenOutOfContainer) or (action == invmonActionPutIntoContainer)) and
      (inv.items.getField(containerId, invFieldIdentifyLevel) ~= nil) and
      (inv.items.getField(containerId, invFieldIdentifyLevel) ~= invIdLevelNone) then
     inv.items.setStatField(containerId, invStatFieldHolding, (holding or 0))
     inv.items.setStatField(containerId, invStatFieldItemsInside, (itemsInside or 0))
     inv.items.setStatField(containerId, invStatFieldTotWeight, (totWeight or 0))
+  end -- if
+
+  -- Persist any in-memory changes from this invmon event to SQLite.  inv.items.remove
+  -- already deleted the row for actions that drop the item (3, 7, 9), so we save only
+  -- when the entry still exists.  We also skip brand-new stubs (identifyLevel=None on
+  -- cache miss) because the eager refresh will fill them in and save with full data.
+  local itemEntry = inv.items.getEntry(objId)
+  if (itemEntry ~= nil) and (itemEntry[invFieldIdentifyLevel] ~= invIdLevelNone) then
+    dinv_db.saveItem(objId, itemEntry)
+  end -- if
+
+  -- For container moves (actions 5/6) the container's stats and/or identifyLevel may
+  -- have been mutated above.  Persist the container row too so a crash/reload preserves
+  -- the updated stats and any re-identification flag we set.
+  if (containerId ~= -1) then
+    local containerEntry = inv.items.getEntry(containerId)
+    if (containerEntry ~= nil) then
+      dinv_db.saveItem(containerId, containerEntry)
+    end -- if
   end -- if
 
   return retval
