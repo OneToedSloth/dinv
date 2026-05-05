@@ -16,6 +16,7 @@
 -- inv.unused.isSnapshotItem(objId)
 -- inv.unused.priorityHasSets(priorityName)
 -- inv.unused.partitionPriorities()
+-- inv.unused.collectUsedIds(priorities)
 -- inv.unused.isOwnedLocation(objLoc)
 -- inv.unused.isCandidate(objId, usedIds, nokeep)
 --
@@ -146,18 +147,7 @@ function inv.unused.displayCR()
   local endTag     = inv.unused.displayPkg.endTag
 
   -- Collect the set of obj_ids used by any of the considered priorities at any level/wear-loc
-  local usedIds = {}
-  for _, priorityName in ipairs(priorities) do
-    if (inv.set.table[priorityName] ~= nil) then
-      for _, levelSets in pairs(inv.set.table[priorityName]) do
-        for _, itemData in pairs(levelSets) do
-          if (itemData ~= nil) and (itemData.id ~= nil) then
-            usedIds[itemData.id] = true
-          end -- if
-        end -- for
-      end -- for
-    end -- if
-  end -- for
+  local usedIds = inv.unused.collectUsedIds(priorities)
 
   -- Walk the inventory table and collect items that pass all exclusion filters
   local candidateIds = {}
@@ -254,6 +244,27 @@ function inv.unused.partitionPriorities()
 
   return analyzed, skipped
 end -- inv.unused.partitionPriorities
+
+
+-- Collect the set of obj_ids used by any of the given priorities at any level/wear-loc.
+-- Returns a { objId = true } map.  Shared by inv.unused.displayCR (the "dinv unused" command)
+-- and the "unused" search query tag.
+function inv.unused.collectUsedIds(priorities)
+  local usedIds = {}
+  if (priorities == nil) or (inv.set.table == nil) then return usedIds end
+  for _, priorityName in ipairs(priorities) do
+    if (inv.set.table[priorityName] ~= nil) then
+      for _, levelSets in pairs(inv.set.table[priorityName]) do
+        for _, itemData in pairs(levelSets) do
+          if (itemData ~= nil) and (itemData.id ~= nil) then
+            usedIds[itemData.id] = true
+          end -- if
+        end -- for
+      end -- for
+    end -- if
+  end -- for
+  return usedIds
+end -- inv.unused.collectUsedIds
 
 
 -- Returns true if objLoc (a string name or numeric container objId) resolves to one of the

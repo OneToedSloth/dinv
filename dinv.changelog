@@ -2,6 +2,27 @@
 dbot.changelog = {}
 
 
+dbot.changelog[3.0082] =
+{
+  { change = drlDbotChangeLogTypeNew,
+    desc   = [[Add "unused <priorityName | all>" as a query tag.  The
+           existing "dinv unused" command lists owned wearables that
+           don't appear in a priority's analyzed sets, but that filter
+           wasn't usable inside the regular query language.  The new
+           tag composes with everything else.  "dinv search wearable
+           head unused mage" lists head gear not part of any mage
+           analyzed set; "dinv put 2.bag unused all" drops everything
+           outside any analyzed priority into the second bag;
+           "~unused mage" inverts to "items used by mage".  The tag
+           does pure analyzed-sets membership lookup -- it deliberately
+           does not apply the "dinv unused" command's extra filters
+           (excluded types, ownedLocations, snapshot exclusion, keep
+           flag), so you can layer those yourself with other tags.
+           Unknown priority names are rejected; priorities with no
+           analyze data return every item with an info message.]]
+  }
+}
+
 dbot.changelog[3.0081] =
 {
   { change = drlDbotChangeLogTypeFix,

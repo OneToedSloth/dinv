@@ -3176,6 +3176,45 @@ function inv.items.search(arrayOfQueryArrays, allowIgnored)
 
   for _, queryArray in ipairs(arrayOfQueryArrays) do
 
+    -- Pre-compute usedIds for any "unused <priorityName | all>" filters in this query branch.
+    -- Walking inv.set.table is O(thousands of entries); cache once per branch keyed by the
+    -- (lowercased) priority value so the per-item check is O(1).
+    local usedIdsByPriority = nil  -- nil if no "unused" filter in this branch
+    for _, q in ipairs(queryArray) do
+      local pkey = string.lower(q[1] or "")
+      if (pkey:sub(1, 1) == "~") then pkey = pkey:sub(2) end -- strip inversion for the lookup
+      if (pkey == "unused") then
+        -- Sets are lazy-loaded; ensure the table is populated before priorityHasSets/
+        -- collectUsedIds read it.  Idempotent (no-op if already loaded).
+        inv.set.ensureLoaded()
+        local pri = string.lower(q[2] or "")
+        if (pri == "") then
+          dbot.warn("inv.items.search: \"unused\" query requires a priority name or \"all\"")
+          return nil, DRL_RET_INVALID_PARAM
+        end -- if
+        if (usedIdsByPriority == nil) then usedIdsByPriority = {} end
+        if (usedIdsByPriority[pri] == nil) then
+          local prioritiesToCheck
+          if (pri == "all") then
+            prioritiesToCheck = inv.unused.partitionPriorities()
+            if (#prioritiesToCheck == 0) then
+              dbot.info("\"unused all\": no priorities have analyze data, every item will match")
+            end -- if
+          elseif (inv.priority.table ~= nil) and (inv.priority.table[pri] ~= nil) then
+            if (not inv.unused.priorityHasSets(pri)) then
+              dbot.info("Priority \"" .. pri .. "\" has no analyze data; \"unused " .. pri ..
+                        "\" will match every item")
+            end -- if
+            prioritiesToCheck = { pri }
+          else
+            dbot.warn("inv.items.search: \"unused\" priority \"" .. pri .. "\" does not exist")
+            return nil, DRL_RET_MISSING_ENTRY
+          end -- if
+          usedIdsByPriority[pri] = inv.unused.collectUsedIds(prioritiesToCheck)
+        end -- if
+      end -- if
+    end -- for
+
     -- Pre-filter via SQL for simple criteria (level, type, name, etc.)
     -- Returns a set of candidate obj_ids, or nil if no SQL filtering is possible
     local sqlCandidates = dinv_db.searchItems(queryArray)
@@ -3296,7 +3335,19 @@ function inv.items.search(arrayOfQueryArrays, allowIgnored)
               itemMatches = false
               break
             end -- if
- 
+
+          -- "unused <priorityName | all>": match items NOT in the analyzed sets table for the
+          -- named priority.  "~unused" inverts (match items that ARE in the analyzed sets).
+          -- The pre-scan above built usedIdsByPriority; here we just do an O(1) lookup.
+          elseif (key == "unused") then
+            local pri = value -- already lowercased by the caller
+            local usedIds = (usedIdsByPriority ~= nil) and usedIdsByPriority[pri] or nil
+            local isUsed = (usedIds ~= nil) and (usedIds[tonumber(itemId) or itemId] == true) or false
+            if ((invert == false) and isUsed) or ((invert == true) and (not isUsed)) then
+              itemMatches = false
+              break
+            end -- if
+
           -- If we are searching for an element in a string of elements (e.g., a keyword in a keyword list
           -- or a flag in a list of flags) check if the queried string is present.  We use a case-insensitive
           -- search by making everything in the strings lower case.  We also temporarily replace special

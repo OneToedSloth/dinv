@@ -235,6 +235,7 @@ dinv_db.luaOnlyFields = {
   keywords = true, flags = true, wearable = true, clan = true, spells = true,
   custom = true, rname = true, rloc = true, rlocation = true,
   location = true, loc = true,  -- location uses invFieldObjLoc, not a stat column
+  unused = true,                -- queries inv.set.table, not a stat column
 }
 
 -- Pre-filter a single query array via SQL. Returns a set (table) of obj_ids

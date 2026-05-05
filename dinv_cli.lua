@@ -561,6 +561,13 @@ Examples:
 
   9) Display EVERYTHING (no I'm not pasting that output here!)
      "@Gdinv search all@W"
+
+ 10) Find owned wearables that are not part of any analyzed set for the @Cmage@W priority
+     (i.e., gear that the @Gdinv analyze@W output for @Cmage@W never picks up).  Combines with
+     other tags so you can scope the search; use the @C~@W prefix to invert the match.
+     "@Gdinv search wearable head unused mage@W"
+     "@Gdinv search type weapon ~unused mage@W"
+     "@Gdinv put 2.bag unused all@W"
 ]])
 
 end -- inv.cli.search.examples
