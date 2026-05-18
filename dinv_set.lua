@@ -220,13 +220,15 @@ function inv.set.create(priorityName, level, synchronous, intensity)
     return DRL_RET_BUSY
   end -- if
 
-  -- Whack the previous equipment set for this priority and level (if it exists).  The creation
-  -- of the set happens asynchronously in a co-routine.  If we want to know when the creation is
-  -- done, we can spin and wait for the set to become non-nil.
+  -- Ensure the priority subtable exists.  We deliberately do NOT nil the
+  -- existing level entry here: callers can use inv.set.createPkg as the
+  -- busy signal instead, which keeps the previous set intact (in both
+  -- memory and SQLite) until createCR successfully computes a replacement.
+  -- Nilling first plus a wholesale inv.set.save during fini would otherwise
+  -- wipe the row permanently if createCR is interrupted (disconnect, error).
   if (inv.set.table[priorityName] == nil) then
     inv.set.table[priorityName] = {}
   end -- if
-  inv.set.table[priorityName][level] = nil
 
   -- Everything looks good :)  Kick off the actual creation of the set!
   inv.set.createPkg = {}
@@ -411,10 +413,15 @@ function inv.set.createCR()
     dbot.info("Possibility #5: There is a bug in dinv, but let\'s not go there...")
   end -- if
 
-  -- Wait until the end to save the set (calling functions can know it isn't ready yet if it is nil)
+  -- Commit the new set to memory and disk.  Persisting per-level here means
+  -- one-off "dinv set wear" / "dinv set display" / "dinv weapon use" calls
+  -- survive a reload without needing to re-run "dinv analyze" -- the previous
+  -- code only saved at fini, which left freshly computed sets vulnerable to
+  -- crashes and made the matching items show up as "unused" in dinv unused.
   inv.set.table[priorityName][level] = bestSet
+  dinv_db.saveSetLevel(priorityName, level, bestSet)
 
-  dbot.debug("Created " .. priorityName .. "[" .. level .. "] set with score " .. 
+  dbot.debug("Created " .. priorityName .. "[" .. level .. "] set with score " ..
              string.format("%.2f", bestScore))
 
   -- We are done!
@@ -762,10 +769,14 @@ function inv.set.displayCR()
     return inv.tags.stop(invTagsSet, endTag, retval)
   end -- if
 
-  -- Spin and wait until the new set is not nil
+  -- Spin and wait until createCR finishes (signaled by inv.set.createPkg
+  -- becoming nil).  Previously this watched inv.set.table[…][level] == nil
+  -- but that was both fragile -- it incorrectly fired when the level had
+  -- never been analyzed -- and tied to the just-removed premature nil at
+  -- the top of inv.set.create.
   local waitForSetDisplayTimeout = 0
   local waitForSetDisplayThreshold = 10
-  while (inv.set.table[priorityName][level] == nil) do
+  while (inv.set.createPkg ~= nil) do
     wait.time(drlSpinnerPeriodDefault)
     waitForSetDisplayTimeout = waitForSetDisplayTimeout + drlSpinnerPeriodDefault
     if (waitForSetDisplayTimeout > waitForSetDisplayThreshold) then
@@ -908,12 +919,13 @@ function inv.set.createAndWearCR()
     return inv.tags.stop(invTagsSet, endTag, retval)
   end -- if
 
-  -- Spin and wait until the new set is not nil
+  -- Spin and wait until createCR finishes (signaled by inv.set.createPkg
+  -- becoming nil) -- see displayCR for the same migration.
   local totTime = 0
   local timeout = 10
-  while (inv.set.table[priorityName][level] == nil) do
+  while (inv.set.createPkg ~= nil) do
     if (totTime > timeout) then
-      dbot.warn("inv.set.createAndWearCR: Failed to create set " .. priorityName .. 
+      dbot.warn("inv.set.createAndWearCR: Failed to create set " .. priorityName ..
                 "[" .. level .. "] within " .. timeout .. " seconds")
       inv.set.createAndWearPkg = nil
       return inv.tags.stop(invTagsSet, endTag, DRL_RET_TIMEOUT)

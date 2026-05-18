@@ -100,7 +100,11 @@ function inv.analyze.setsCR()
   for currentLevel = inv.analyze.setsPkg.minLevel, maxLevel, inv.analyze.setsPkg.skipLevel do
     dbot.debug("Creating @clevel " .. currentLevel .. " @Wanalysis set for @C" .. inv.analyze.setsPkg.priorityName)
 
-    inv.set.table[inv.analyze.setsPkg.priorityName][currentLevel] = nil
+    -- inv.set.create no longer nils the entry first (it relied on that as a
+    -- busy signal and an interrupted analyze run would permanently wipe rows
+    -- via fini's wholesale save).  createCR replaces the entry in-place when
+    -- it completes, and the inv.set.createPkg busy-signal below covers the
+    -- ready/not-ready check.
     retval = inv.set.create(inv.analyze.setsPkg.priorityName, currentLevel,
                             drlSynchronous, inv.analyze.setsPkg.intensity)
     if (retval ~= DRL_RET_SUCCESS) then
@@ -128,10 +132,13 @@ function inv.analyze.setsCR()
       wait.time(0.1)
     end -- if
 
-    -- Wait for the table to be filled in (or time out)
+    -- Wait for createCR to finish (signaled by inv.set.createPkg becoming
+    -- nil).  Watching the table entry was unreliable -- a pre-existing
+    -- set looked identical to a freshly completed one -- and depended on
+    -- the just-removed premature nil at the top of inv.set.create.
     local totTime = 0
     local timeout = 10
-    while (inv.set.table[inv.analyze.setsPkg.priorityName][currentLevel] == nil) do
+    while (inv.set.createPkg ~= nil) do
       wait.time(drlSpinnerPeriodDefault)
       totTime = totTime + drlSpinnerPeriodDefault
       if (totTime > timeout) then

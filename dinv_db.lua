@@ -275,6 +275,40 @@ function dinv_db.deleteCacheCustom(objId)
 end
 
 
+-- Replace the disk rows for a single (priorityName, level) entry of inv.set.table.
+-- Called by inv.set.createCR after a successful recompute so the just-computed set
+-- lands on disk immediately (instead of waiting for the next wholesale inv.set.save).
+-- A nil or empty equipSet leaves the rows deleted.
+function dinv_db.saveSetLevel(priorityName, level, equipSet)
+  local db = dinv_db.handle
+  if not db then return DRL_RET_UNINITIALIZED end
+
+  return dinv_db.transaction(function()
+    db:exec(string.format(
+      "DELETE FROM sets WHERE priority_name = %s AND level = %d",
+      dinv_db.fixsql(priorityName), level))
+
+    if equipSet then
+      for wearLoc, itemData in pairs(equipSet) do
+        local query = string.format(
+          "INSERT INTO sets (priority_name, level, wear_loc, obj_id, score) VALUES (%s, %d, %s, %s, %s)",
+          dinv_db.fixsql(priorityName),
+          level,
+          dinv_db.fixsql(wearLoc),
+          dinv_db.fixnum(itemData.id),
+          dinv_db.fixnum(itemData.score))
+        db:exec(query)
+        if dinv_db.dbcheck(db:errcode(), db:errmsg(), query) then
+          return DRL_RET_INTERNAL_ERROR
+        end
+      end
+    end
+
+    return DRL_RET_SUCCESS
+  end)
+end
+
+
 -- Reverse mapping: SQL column name → Lua stat field name (built once at load time)
 dinv_db.sqlToLuaStat = {}
 for _, colDef in ipairs(dinv_db.itemStatColumns) do

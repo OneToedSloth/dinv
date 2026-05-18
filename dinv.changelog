@@ -2,6 +2,34 @@
 dbot.changelog = {}
 
 
+dbot.changelog[3.0089] =
+{
+  { change = drlDbotChangeLogTypeFix,
+    desc   = [[Stop "dinv set wear", "dinv set display", "dinv weapon
+           use/next", and an interrupted "dinv analyze create" from
+           silently wiping or leaking analyzed sets.  inv.set.create
+           used to nil the (priorityName, level) entry up front and
+           rely on the next inv.set.save's wholesale rewrite to land
+           the freshly computed bestSet on disk -- with two problems.
+           First, if createCR was interrupted (disconnect, error)
+           between the nil and the assignment, the next fini's save
+           would DELETE FROM sets and re-INSERT without the nilled
+           level, permanently wiping the row.  Second, the happy-path
+           save only ever fired at fini, so a one-off "set wear" or
+           "weapon next" computed a new best set but never persisted
+           it -- across reload "dinv unused" flagged the worn items
+           as unused.  Switch the busy signal from "level entry is
+           nil" to "inv.set.createPkg ~= nil" (which is set before
+           createCR runs and cleared at completion in both sync and
+           async modes), leave the old set in place until createCR
+           replaces it, and save just that (priorityName, level)
+           through a new dinv_db.saveSetLevel helper as soon as
+           createCR finishes.  Same change applied to analyze.setsCR's
+           per-iteration loop so an interrupted analyze keeps every
+           level it has already computed.]]
+  }
+}
+
 dbot.changelog[3.0088] =
 {
   { change = drlDbotChangeLogTypeFix,
