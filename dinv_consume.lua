@@ -306,6 +306,7 @@ function inv.consume.remove(typeName, itemName)
   -- If itemName is nil, remove all of the specified type
   if (itemName == nil) or (itemName == "") then
     inv.consume.table[typeName] = nil
+    inv.consume.save()
     retval = DRL_RET_SUCCESS
 
   -- Search the table for the item matching "itemName" and remove just that item

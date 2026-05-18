@@ -2,6 +2,18 @@
 dbot.changelog = {}
 
 
+dbot.changelog[3.0087] =
+{
+  { change = drlDbotChangeLogTypeFix,
+    desc   = [[Persist "dinv consume remove <type>" (bulk delete with no
+           itemName) to SQLite.  The bulk path nilled inv.consume.table
+           [typeName] and returned SUCCESS without calling
+           inv.consume.save(), so the type came back from disk on the
+           next reload.  The single-item remove path was already
+           saving.  Move the save call to cover both branches.]]
+  }
+}
+
 dbot.changelog[3.0086] =
 {
   { change = drlDbotChangeLogTypeFix,
