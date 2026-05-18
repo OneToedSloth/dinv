@@ -2,6 +2,26 @@
 dbot.changelog = {}
 
 
+dbot.changelog[3.0090] =
+{
+  { change = drlDbotChangeLogTypeFix,
+    desc   = [[Flush in-memory state to SQLite before snapshotting the
+           database in "dinv backup create" and the automatic
+           pre-build/pre-migrate backups.  The function closed the
+           live DB handle and copied the file without first asking
+           any module to flush, so any mutation that hadn't been
+           persisted yet (lazy-seeded stat bonuses, weapon-use
+           mutations to the weaponSet priority, anything queued
+           between fini-driven saves before the per-mutation fixes
+           landed) was silently omitted from the backup -- and "dinv
+           backup restore" would roll the player to a state strictly
+           older than what was visible when the backup ran.  A new
+           inv.flush() iterates inv.modules and dbot.modules and
+           calls each module's save(); dbot.backup.create now calls
+           it before dinv_db.close().]]
+  }
+}
+
 dbot.changelog[3.0089] =
 {
   { change = drlDbotChangeLogTypeFix,

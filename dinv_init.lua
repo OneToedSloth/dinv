@@ -591,6 +591,40 @@ function inv.init.atActiveCR()
 end -- inv.init.atActiveCR
 
 
+-- Force every module's in-memory state to SQLite WITHOUT de-initializing.
+-- Used by dbot.backup.create immediately before it closes the DB and copies
+-- the file -- otherwise pending in-memory mutations (lazy-seeded stat bonuses,
+-- weaponSet exclusions from "dinv weapon use", anything else not yet
+-- persisted per-mutation) would be missing from the backup, and "dinv backup
+-- restore" would silently produce a state strictly older than what was on
+-- screen when the backup was taken.  Cheap modules (config, consume, tags)
+-- always run; expensive wholesale rewrites (items, cache) only matter for
+-- the rare case where per-mutation save was bypassed.
+function inv.flush()
+  if not dbot.gmcp.isInitialized then return DRL_RET_UNINITIALIZED end
+
+  for module in inv.modules:gmatch("%S+") do
+    if inv[module] and type(inv[module].save) == "function" then
+      local rv = inv[module].save()
+      if (rv ~= DRL_RET_SUCCESS) and (rv ~= DRL_RET_UNINITIALIZED) then
+        dbot.warn("inv.flush: inv." .. module .. ".save returned " .. dbot.retval.getString(rv))
+      end
+    end
+  end
+
+  for module in dbot.modules:gmatch("%S+") do
+    if dbot[module] and type(dbot[module].save) == "function" then
+      local rv = dbot[module].save()
+      if (rv ~= DRL_RET_SUCCESS) and (rv ~= DRL_RET_UNINITIALIZED) then
+        dbot.warn("inv.flush: dbot." .. module .. ".save returned " .. dbot.retval.getString(rv))
+      end
+    end
+  end
+
+  return DRL_RET_SUCCESS
+end
+
+
 function inv.fini(doSaveState)
   local retval = DRL_RET_SUCCESS
 

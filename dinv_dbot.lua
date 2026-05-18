@@ -1345,6 +1345,14 @@ function dbot.backup.create(name, endTag)
   -- Remove any old backups with the same name
   dbot.backup.delete(name, nil, true)
 
+  -- Flush any in-memory mutations to disk before we snapshot the file.
+  -- Without this, a backup taken between two mutations could omit the
+  -- newer one and "dinv backup restore" would silently roll back to a
+  -- strictly older state than was visible when the backup ran.
+  if type(inv.flush) == "function" then
+    inv.flush()
+  end
+
   -- Close the database to ensure the file is consistent
   dinv_db.close()
 
