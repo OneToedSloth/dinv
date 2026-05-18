@@ -2,6 +2,25 @@
 dbot.changelog = {}
 
 
+dbot.changelog[3.0091] =
+{
+  { change = drlDbotChangeLogTypeFix,
+    desc   = [[Persist the weaponSet priority after "dinv weapon
+           <priority> <damtypes>" and "dinv weapon next" mutate its
+           damtype exclusions.  inv.weapon.use cloned the source
+           priority (which saved an unmodified copy to disk) and
+           then mutated the clone's priBlock.priorities entries in
+           memory only; inv.weapon.next mutated similarly without
+           saving.  After a reload the on-disk weaponSet did not
+           match the in-memory state that had produced the equipment
+           set the player was actually wearing, so the next "weapon
+           next" would start from the wrong baseline -- cycling back
+           through damage types the player had already rotated past.
+           Both functions now call inv.priority.save() after the
+           mutations.]]
+  }
+}
+
 dbot.changelog[3.0090] =
 {
   { change = drlDbotChangeLogTypeFix,

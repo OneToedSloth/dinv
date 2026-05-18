@@ -63,6 +63,13 @@ function inv.weapon.use(priorityName, damTypes, endTag)
     end -- for
   end -- for
 
+  -- Persist the damtype exclusions we just set.  inv.priority.clone above already
+  -- wrote the unmodified copy to disk, but the loop above mutates the priority
+  -- blocks in memory only -- without this save the on-disk weaponSet wouldn't
+  -- match the one that generated the equipment set, and "dinv weapon next" on
+  -- the next session would start from the wrong baseline.
+  inv.priority.save()
+
   -- Wear the set that matches the weapon priority
   return inv.set.createAndWear(inv.weapon.priorityName, dbot.gmcp.getLevel(),
                                inv.set.createIntensity, endTag)
@@ -105,6 +112,12 @@ function inv.weapon.next(endTag)
   for _, priBlock in ipairs(inv.priority.table[inv.weapon.priorityName] or {}) do
     priBlock.priorities["~" .. string.lower(currentDamType)] = 1
   end -- for
+
+  -- Persist the new exclusion so the on-disk weaponSet stays in sync with the
+  -- set we're about to wear; without this, a reload would lose the running
+  -- exclusion history and "weapon next" would cycle back through dam types
+  -- the user has already rotated past.
+  inv.priority.save()
 
   -- Wear the set that matches the updated weapon priority
   return inv.set.createAndWear(inv.weapon.priorityName, level, inv.set.createIntensity, endTag)
