@@ -5735,6 +5735,18 @@ function inv.items.trigger.itemIdEnd()
     inv.items.setStatField(inv.items.identifyPkg.objId, invItemEffectsHammerswing, 1)
   end -- if
 
+  -- Persist the just-identified row.  Most callers reach itemIdEnd through
+  -- inv.items.identifyCR's loop which saves at line 1340; the exception is
+  -- inv.items.timer.idTimeout, which fires itemIdEnd from a one-shot timer
+  -- and used to leave the freshly-set identifyLevel and affectMod pseudo-
+  -- stats in memory only -- next refresh would silently re-identify the
+  -- item.  Saving here covers the timeout path; for the identifyCR path
+  -- it is one extra write per item but the row content is unchanged.
+  local idObjId = inv.items.identifyPkg.objId
+  if (idObjId ~= nil) and (inv.items.table[idObjId] ~= nil) then
+    dinv_db.saveItem(idObjId, inv.items.table[idObjId])
+  end -- if
+
   -- The identification process is done!
   inv.items.identifyPkg = nil
 

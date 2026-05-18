@@ -2,6 +2,26 @@
 dbot.changelog = {}
 
 
+dbot.changelog[3.0095] =
+{
+  { change = drlDbotChangeLogTypeFix,
+    desc   = [[Persist the identified row at the end of inv.items.trigger
+           .itemIdEnd.  Most callers reach itemIdEnd through
+           inv.items.identifyCR's loop which saves the item per-
+           iteration -- but inv.items.timer.idTimeout fires
+           itemIdEnd from a one-shot timer when the identify command
+           output stalls, with no surrounding loop to save.  Any
+           identifyLevel flip and the affectMod / item-specific
+           pseudo-stats added in itemIdEnd lived only in memory
+           after a timeout, and the next refresh would silently re-
+           identify the item.  Saving at the end of itemIdEnd costs
+           one extra (idempotent) write per identifyCR iteration but
+           covers the timeout path and the auction / shopkeeper
+           transient-objId cases (whose rows are deleted shortly by
+           inv.items.remove anyway).  Audit M1.]]
+  }
+}
+
 dbot.changelog[3.0094] =
 {
   { change = drlDbotChangeLogTypeMisc,
