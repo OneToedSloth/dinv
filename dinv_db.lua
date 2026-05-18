@@ -211,6 +211,70 @@ function dinv_db.deleteItem(objId)
 end
 
 
+-- Per-row save/delete helpers for the cache tables.  Used by inv.cache.add and
+-- inv.cache.remove so mutations are durable immediately instead of waiting for
+-- the bulk save that runs in inv.cache.fini -- the bulk path is still used by
+-- fini, reset, and config to wholesale rewrite the table.
+
+function dinv_db.saveCacheRecent(objId, entry)
+  local db = dinv_db.handle
+  if not db or not entry then return end
+
+  local query = dinv_db.buildItemInsert("cache_recent", objId, entry)
+  db:exec(query)
+  dinv_db.dbcheck(db:errcode(), db:errmsg(), query)
+end
+
+function dinv_db.deleteCacheRecent(objId)
+  local db = dinv_db.handle
+  if not db then return end
+
+  local query = string.format("DELETE FROM cache_recent WHERE obj_id = %s", dinv_db.fixnum(objId))
+  db:exec(query)
+end
+
+function dinv_db.saveCacheFrequent(cacheKey, entry)
+  local db = dinv_db.handle
+  if not db or not entry or cacheKey == nil or cacheKey == "" then return end
+
+  local query = dinv_db.buildItemRowInsert(
+    "cache_frequent", "cache_key", dinv_db.fixsql(cacheKey), entry)
+  db:exec(query)
+  dinv_db.dbcheck(db:errcode(), db:errmsg(), query)
+end
+
+function dinv_db.deleteCacheFrequent(cacheKey)
+  local db = dinv_db.handle
+  if not db or cacheKey == nil or cacheKey == "" then return end
+
+  local query = string.format(
+    "DELETE FROM cache_frequent WHERE cache_key = %s", dinv_db.fixsql(cacheKey))
+  db:exec(query)
+end
+
+function dinv_db.saveCacheCustom(objId, entry)
+  local db = dinv_db.handle
+  if not db or not entry then return end
+
+  local query = string.format(
+    "INSERT OR REPLACE INTO cache_custom (obj_id, keywords, organize) VALUES (%s, %s, %s)",
+    dinv_db.fixnum(objId),
+    dinv_db.fixsql(entry.keywords),
+    dinv_db.fixsql(entry.organize))
+  db:exec(query)
+  dinv_db.dbcheck(db:errcode(), db:errmsg(), query)
+end
+
+function dinv_db.deleteCacheCustom(objId)
+  local db = dinv_db.handle
+  if not db then return end
+
+  local query = string.format(
+    "DELETE FROM cache_custom WHERE obj_id = %s", dinv_db.fixnum(objId))
+  db:exec(query)
+end
+
+
 -- Reverse mapping: SQL column name → Lua stat field name (built once at load time)
 dinv_db.sqlToLuaStat = {}
 for _, colDef in ipairs(dinv_db.itemStatColumns) do

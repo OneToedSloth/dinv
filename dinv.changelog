@@ -2,6 +2,29 @@
 dbot.changelog = {}
 
 
+dbot.changelog[3.0088] =
+{
+  { change = drlDbotChangeLogTypeFix,
+    desc   = [[Persist recent, frequent, and custom cache mutations to
+           SQLite immediately instead of only on inv.cache.fini.  The
+           inherited "save on clean disconnect" pattern was lossy on
+           crashes (matching aard_inventory's behaviour) but it also
+           let LRU evictions briefly desync from disk: an entry pruned
+           from memory still existed in cache_custom until the next
+           saveCustom, so if the user ran "dinv key foo bar" right
+           before a crash and the custom cache had pruned bar's
+           keyword entry, the pruned entry would resurrect on reload.
+           For the frequent cache, v3.0085's SQL fallback assumed the
+           cache was durable after consume add ran -- it wasn't.  New
+           per-row save/delete helpers in dinv_db (saveCacheRecent /
+           deleteCacheRecent, saveCacheFrequent / deleteCacheFrequent,
+           saveCacheCustom / deleteCacheCustom) replace the bulk
+           rewrite on every mutation; bulk save still runs on fini and
+           reset/config for wholesale rewrites.  Prune now cascades
+           through inv.cache.remove so disk reflects memory.]]
+  }
+}
+
 dbot.changelog[3.0087] =
 {
   { change = drlDbotChangeLogTypeFix,

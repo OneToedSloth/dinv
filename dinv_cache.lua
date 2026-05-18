@@ -406,20 +406,25 @@ function inv.cache.add(cache, objId)
   local idLevel = inv.items.getField(objId, invFieldIdentifyLevel)
   if (idLevel ~= nil) then
     if (cache.name == inv.cache.recent.name) then
-      cache.entries[objId] = { timeCached = dbot.getTime(), entry = dbot.table.getCopy(entry) }
+      local copy = dbot.table.getCopy(entry)
+      cache.entries[objId] = { timeCached = dbot.getTime(), entry = copy }
+      dinv_db.saveCacheRecent(objId, copy)
     elseif (cache.name == inv.cache.frequent.name) then
       local name = inv.items.getStatField(objId, invStatFieldName)
       if (name ~= nil) and (name ~= "") then
         -- invdata strips out commas in the names of items.  As a result, we won't find items in
         -- the cache unless we also store them in a form without commas.
         name = string.gsub(name, ",", "")
-        cache.entries[name] = { timeCached = dbot.getTime(), entry = dbot.table.getCopy(entry) }
+        local copy = dbot.table.getCopy(entry)
+        cache.entries[name] = { timeCached = dbot.getTime(), entry = copy }
+        dinv_db.saveCacheFrequent(name, copy)
       end -- if
     elseif (cache.name == inv.cache.custom.name) then
       local newEntry = {}
       newEntry.keywords = inv.items.getStatField(objId, invStatFieldKeywords) or ""
       newEntry.organize = inv.items.getStatField(objId, invQueryKeyOrganize)  or ""
       cache.entries[objId] = { timeCached = dbot.getTime(), entry = newEntry }
+      dinv_db.saveCacheCustom(objId, newEntry)
     else
       dbot.warn("inv.cache.add: Unknown cache name \"" .. (cache.name or "nil") .. "\"")
     end -- if
@@ -432,17 +437,11 @@ function inv.cache.add(cache, objId)
   -- remove the least recently used item when necessary.  As an optimization once the cache
   -- starts to get full, we whack a certain percentage (10%? 20%?) of entries when we prune the
   -- cache so that we don't need to go through the overhead of sorting everything every time
-  -- we drop an item.
+  -- we drop an item.  Pruning cascades through inv.cache.remove which also deletes the
+  -- corresponding SQL rows so memory and disk stay in sync.
   if (dbot.table.getNumEntries(cache.entries) > cache.maxEntries) then
     retval = inv.cache.prune(cache)
   end -- if
-
-  -- Note: To cut down on overhead, we currently do not call inv.cache.save() here.  Instead,
-  --       the lossy caches (recent and frequent) are saved in inv.cache.fini.  There is a chance
-  --       we may miss some cache updates this way if mush exits uncleanly, but the downside is
-  --       low because we we'll just re-identify anything we need if that happens.  On the other
-  --       hand, we must save the custom cache after a batch add so that we don't lose what the
-  --       user entered.
 
   return retval
 end -- inv.cache.add
@@ -468,10 +467,15 @@ function inv.cache.remove(cache, key)
 
   cache.entries[cacheKey] = nil
 
-  -- Note: To cut down on overhead, we currently do not call inv.cache.save() here.  Instead,
-  --       the cache is saved in inv.cache.fini when we disconnect or reload the plugin.  There
-  --       is a chance we may miss some cache updates this way if mush exits uncleanly, but the
-  --       downside is low because we we'll just re-identify anything we need if that happens.
+  -- Mirror the in-memory removal to SQLite so prune evictions and explicit
+  -- removes can't resurrect on the next reload.
+  if (cache.name == inv.cache.recent.name) then
+    dinv_db.deleteCacheRecent(cacheKey)
+  elseif (cache.name == inv.cache.frequent.name) then
+    dinv_db.deleteCacheFrequent(cacheKey)
+  elseif (cache.name == inv.cache.custom.name) then
+    dinv_db.deleteCacheCustom(cacheKey)
+  end -- if
 
   return DRL_RET_SUCCESS
 end -- inv.cache.remove
