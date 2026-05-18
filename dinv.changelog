@@ -2,6 +2,29 @@
 dbot.changelog = {}
 
 
+dbot.changelog[3.0084] =
+{
+  { change = drlDbotChangeLogTypeFix,
+    desc   = [[Persist the frequent-item cache to SQLite so it survives
+           plugin reloads.  v3.0014's cache-to-SQLite migration left the
+           frequent cache as in-memory only with a TODO to "query existing
+           items/cache_recent by name" as a replacement -- that fallback
+           was never written.  After every reload the cache started empty,
+           so the very first "dinv consume buy" for any item type had no
+           identification template to copy from: the {invitem} cache-miss
+           path only set colorName on the new entry, leaving level, name,
+           type, and stats unset.  "dinv consume display" (SQL COUNT
+           WHERE level=N AND name=fullName) silently ignored those rows
+           and "dinv consume" (Lua scan over inv.items.table) couldn't
+           match them either.  The fix is mechanical: a new cache_frequent
+           table mirroring cache_recent (keyed by the normalized basic
+           name in cache_key), with real saveFrequent / load wiring that
+           round-trips through dinv_db.buildItemRowInsert and
+           rowToItemEntry.  Restores the original Durel design that
+           v3.0014 inadvertently broke.]]
+  }
+}
+
 dbot.changelog[3.0083] =
 {
   { change = drlDbotChangeLogTypeFix,

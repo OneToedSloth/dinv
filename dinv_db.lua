@@ -219,7 +219,7 @@ end
 
 -- Envelope columns that are not stat fields (handled separately in rowToItemEntry)
 dinv_db.envelopeColumns = {
-  obj_id = true, identify_level = true, object_location = true,
+  obj_id = true, cache_key = true, identify_level = true, object_location = true,
   home_container = true, color_name = true,
 }
 
@@ -354,9 +354,16 @@ end
 -- entry is the dinv item structure: { identifyLevel, objectLocation, homeContainer, colorName, stats={...} }
 -- objId is the item's object ID (integer key)
 function dinv_db.buildItemInsert(tableName, objId, entry)
-  local cols = "obj_id, identify_level, object_location, home_container, color_name"
+  return dinv_db.buildItemRowInsert(tableName, "obj_id", dinv_db.fixnum(objId), entry)
+end
+
+-- Generic variant used by tables that key item rows by something other than obj_id
+-- (e.g., cache_frequent keys by normalized basic name in cache_key).  keyValSql must
+-- already be SQL-escaped by the caller (use dinv_db.fixsql / dinv_db.fixnum).
+function dinv_db.buildItemRowInsert(tableName, keyCol, keyValSql, entry)
+  local cols = keyCol .. ", identify_level, object_location, home_container, color_name"
   local vals = string.format("%s, %s, %s, %s, %s",
-    dinv_db.fixnum(objId),
+    keyValSql,
     dinv_db.fixsql(entry.identifyLevel),
     dinv_db.fixsql(entry.objectLocation),
     dinv_db.fixnum(entry.homeContainer),
@@ -568,6 +575,69 @@ local function init_tables()
       CREATE TABLE IF NOT EXISTS cache_custom (
          obj_id   INTEGER PRIMARY KEY,
          keywords TEXT,
+         organize TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS cache_frequent (
+         cache_key        TEXT PRIMARY KEY,
+         identify_level   TEXT NOT NULL DEFAULT 'none',
+         object_location  TEXT,
+         home_container   INTEGER,
+         color_name       TEXT,
+         name             TEXT,
+         level            INTEGER,
+         weight           INTEGER,
+         wearable         TEXT,
+         score            INTEGER,
+         keywords         TEXT,
+         type             TEXT,
+         worth            INTEGER,
+         flags            TEXT,
+         affect_mods      TEXT,
+         material         TEXT,
+         found_at         TEXT,
+         owned_by         TEXT,
+         clan             TEXT,
+         spells           TEXT,
+         leads_to         TEXT,
+         capacity         INTEGER,
+         holding          INTEGER,
+         heaviest_item    INTEGER,
+         items_inside     INTEGER,
+         tot_weight       INTEGER,
+         item_burden      INTEGER,
+         weight_reduction INTEGER,
+         str INTEGER, int INTEGER, wis INTEGER,
+         dex INTEGER, con INTEGER, luck INTEGER,
+         hp INTEGER, mana INTEGER, moves INTEGER,
+         hit INTEGER, dam INTEGER,
+         allphys INTEGER, allmagic INTEGER,
+         acid INTEGER, cold INTEGER, energy INTEGER,
+         holy INTEGER, electric INTEGER, negative INTEGER,
+         shadow INTEGER, magic INTEGER, air INTEGER,
+         earth INTEGER, fire INTEGER, light INTEGER,
+         mental INTEGER, sonic INTEGER, water INTEGER,
+         poison INTEGER, disease INTEGER,
+         slash INTEGER, pierce INTEGER, bash INTEGER,
+         ave_dam          INTEGER,
+         inflicts         TEXT,
+         dam_type         TEXT,
+         weapon_type      TEXT,
+         specials         TEXT,
+         sanctuary INTEGER DEFAULT 0,
+         haste INTEGER DEFAULT 0,
+         flying INTEGER DEFAULT 0,
+         invis INTEGER DEFAULT 0,
+         regeneration INTEGER DEFAULT 0,
+         detectinvis INTEGER DEFAULT 0,
+         detecthidden INTEGER DEFAULT 0,
+         detectevil INTEGER DEFAULT 0,
+         detectgood INTEGER DEFAULT 0,
+         detectmagic INTEGER DEFAULT 0,
+         dualwield INTEGER DEFAULT 0,
+         irongrip INTEGER DEFAULT 0,
+         shield INTEGER DEFAULT 0,
+         hammerswing INTEGER DEFAULT 0,
          organize TEXT
       );
 

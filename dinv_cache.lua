@@ -197,9 +197,27 @@ end -- inv.cache.saveRecent
 
 
 function inv.cache.saveFrequent()
-  -- Frequent cache is no longer persisted separately.
-  -- Its optimization is handled by querying existing items/cache_recent by name.
-  return DRL_RET_SUCCESS
+  local db = dinv_db.handle
+  if not db then return DRL_RET_UNINITIALIZED end
+
+  local cache = inv.cache.frequent.table
+  if not cache or not cache.entries then return DRL_RET_UNINITIALIZED end
+
+  return dinv_db.transaction(function()
+    db:exec("DELETE FROM cache_frequent")
+
+    for cacheKey, cacheEntry in pairs(cache.entries) do
+      local query = dinv_db.buildItemRowInsert(
+        "cache_frequent", "cache_key", dinv_db.fixsql(cacheKey), cacheEntry.entry)
+      db:exec(query)
+      if dinv_db.dbcheck(db:errcode(), db:errmsg(), query) then
+        dbot.warn("inv.cache.saveFrequent: Failed to save cached item " .. tostring(cacheKey))
+        return DRL_RET_INTERNAL_ERROR
+      end
+    end
+
+    return DRL_RET_SUCCESS
+  end)
 end -- inv.cache.saveFrequent
 
 
@@ -251,12 +269,20 @@ function inv.cache.load()
     end
   end
 
-  -- Load frequent cache (in-memory only, not persisted)
+  -- Load frequent cache from SQLite.  Keyed by the normalized (comma-stripped)
+  -- basic name; the value mirrors the same item-row schema as cache_recent so it
+  -- round-trips through dinv_db.rowToItemEntry.
   inv.cache.frequent.table = {
     entries    = {},
     name       = inv.cache.frequent.name,
     maxEntries = inv.cache.frequent.defaultNumEntries,
   }
+  if db then
+    for row in db:nrows("SELECT * FROM cache_frequent") do
+      local entry = dinv_db.rowToItemEntry(row)
+      inv.cache.frequent.table.entries[row.cache_key] = { timeCached = 0, entry = entry }
+    end
+  end
 
   -- Load custom cache
   local customRetval = DRL_RET_SUCCESS
