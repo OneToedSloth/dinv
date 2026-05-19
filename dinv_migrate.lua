@@ -25,16 +25,23 @@ inv.migrate = {}
 -- Old aard_inventory plugin ID
 local oldPluginId = "88c86ea252fc1918556df9fe"
 
--- State files we can migrate, in order of processing
+-- State files we can migrate, in order of processing.  Order matters: things that
+-- reference an objId must come after items so any later cross-checks succeed.
+-- Equip bonuses are deliberately not migrated -- they are a deterministic cache
+-- of (levelBonus - spellBonus) that inv.statBonus.get recomputes on demand;
+-- v3.0097 stopped persisting them, so importing old equip rows would be wasted
+-- work (the next save's DELETE FROM stat_bonuses wipes them anyway).
 local stateFiles = {
-  { file = "inv-items.state",        desc = "Items",        root = "inv.items.table" },
-  { file = "inv-priorities.state",   desc = "Priorities",   root = "inv.priority.table" },
-  { file = "inv-set.state",          desc = "Sets",         root = "inv.set.table" },
-  { file = "inv-snapshot.state",     desc = "Snapshots",    root = "inv.snapshot.table" },
-  { file = "inv-consume.state",      desc = "Consumables",  root = "inv.consume.table" },
-  { file = "inv-stats-equip.state",  desc = "Equip bonuses",root = "inv.statBonus.equipBonus" },
-  { file = "inv-stats-spells.state", desc = "Spell bonuses",root = "inv.statBonus.spellBonus" },
-  { file = "inv-config.state",       desc = "Config",       root = "inv.config.table" },
+  { file = "inv-items.state",          desc = "Items",         root = "inv.items.table" },
+  { file = "inv-priorities.state",     desc = "Priorities",    root = "inv.priority.table" },
+  { file = "inv-set.state",            desc = "Sets",          root = "inv.set.table" },
+  { file = "inv-snapshot.state",       desc = "Snapshots",     root = "inv.snapshot.table" },
+  { file = "inv-consume.state",        desc = "Consumables",   root = "inv.consume.table" },
+  { file = "inv-cache-custom.state",   desc = "Custom cache",  root = "inv.cache.custom.table" },
+  { file = "inv-cache-frequent.state", desc = "Frequent cache",root = "inv.cache.frequent.table" },
+  { file = "inv-cache-recent.state",   desc = "Recent cache",  root = "inv.cache.recent.table" },
+  { file = "inv-stats-spells.state",   desc = "Spell bonuses", root = "inv.statBonus.spellBonus" },
+  { file = "inv-config.state",         desc = "Config",        root = "inv.config.table" },
 }
 
 
@@ -381,27 +388,96 @@ end
 
 
 ----------------------------------------------------------------------------------------------------
--- Migration: Stat bonuses (equipment)
+-- Migration: Custom cache
+--
+-- Holds user-set keywords (`dinv key`) and organize queries (`dinv organize`) keyed by objId.
+-- This is the most painful cache to lose during migration because the data is manually
+-- entered by the user, so it predates v3.0086 by a long way -- the omission was a real gap
+-- for users coming over from aard_inventory.
 ----------------------------------------------------------------------------------------------------
 
-local function migrateEquipBonuses(data)
+local function migrateCacheCustom(data)
   local db = dinv_db.handle
   local count = 0
-  local stats = { "int", "wis", "luck", "str", "dex", "con" }
 
-  for level, bonuses in pairs(data) do
-    for _, stat in ipairs(stats) do
-      local val = bonuses[stat]
-      if val then
-        local query = string.format(
-          "INSERT INTO stat_bonuses (bonus_type, level, stat_name, current_val) VALUES ('equip', %d, %s, %s)",
-          level, dinv_db.fixsql(stat), dinv_db.fixnum(val))
-        db:exec(query)
-        if dinv_db.dbcheck(db:errcode(), db:errmsg(), query) then
-          return nil, "Failed to insert equip bonus"
-        end
-        count = count + 1
+  if not data or not data.entries then return 0 end
+
+  for objId, cacheRec in pairs(data.entries) do
+    local entry = cacheRec and cacheRec.entry
+    if entry then
+      local query = string.format(
+        "INSERT INTO cache_custom (obj_id, keywords, organize) VALUES (%s, %s, %s)",
+        dinv_db.fixnum(objId),
+        dinv_db.fixsql(entry.keywords),
+        dinv_db.fixsql(entry.organize))
+      db:exec(query)
+      if dinv_db.dbcheck(db:errcode(), db:errmsg(), query) then
+        return nil, "Failed to insert cache_custom row " .. tostring(objId)
       end
+      count = count + 1
+    end
+  end
+
+  return count
+end
+
+
+----------------------------------------------------------------------------------------------------
+-- Migration: Frequent cache
+--
+-- Templates for frequently-acquired items (potions, pills, scrolls, etc.), keyed by item name
+-- with commas stripped (aard_inventory convention).  Each entry is a full item record that
+-- inv.items.trigger.itemDataStats clones onto a new objId when the matching item is later
+-- acquired.  v3.0085's SQL fallback partially compensates if this is empty, but a migrating
+-- user benefits from a hot start.
+----------------------------------------------------------------------------------------------------
+
+local function migrateCacheFrequent(data)
+  local db = dinv_db.handle
+  local count = 0
+
+  if not data or not data.entries then return 0 end
+
+  for cacheKey, cacheRec in pairs(data.entries) do
+    local entry = cacheRec and cacheRec.entry
+    if entry then
+      local query = dinv_db.buildItemRowInsert(
+        "cache_frequent", "cache_key", dinv_db.fixsql(cacheKey), entry)
+      db:exec(query)
+      if dinv_db.dbcheck(db:errcode(), db:errmsg(), query) then
+        return nil, "Failed to insert cache_frequent row " .. tostring(cacheKey)
+      end
+      count = count + 1
+    end
+  end
+
+  return count
+end
+
+
+----------------------------------------------------------------------------------------------------
+-- Migration: Recent cache
+--
+-- Snapshots of recently-removed items, keyed by their original objId.  Lower-impact than the
+-- other two caches (entries are transient and re-populate naturally during play) but migrating
+-- it preserves continuity for items just dropped before the user ran the migration.
+----------------------------------------------------------------------------------------------------
+
+local function migrateCacheRecent(data)
+  local db = dinv_db.handle
+  local count = 0
+
+  if not data or not data.entries then return 0 end
+
+  for objId, cacheRec in pairs(data.entries) do
+    local entry = cacheRec and cacheRec.entry
+    if entry then
+      local query = dinv_db.buildItemInsert("cache_recent", objId, entry)
+      db:exec(query)
+      if dinv_db.dbcheck(db:errcode(), db:errmsg(), query) then
+        return nil, "Failed to insert cache_recent row " .. tostring(objId)
+      end
+      count = count + 1
     end
   end
 
@@ -558,8 +634,12 @@ function inv.migrate.execute()
             count, migrateErr = migrateSnapshots(data)
           elseif fileInfo.file == "inv-consume.state" then
             count, migrateErr = migrateConsumables(data)
-          elseif fileInfo.file == "inv-stats-equip.state" then
-            count, migrateErr = migrateEquipBonuses(data)
+          elseif fileInfo.file == "inv-cache-custom.state" then
+            count, migrateErr = migrateCacheCustom(data)
+          elseif fileInfo.file == "inv-cache-frequent.state" then
+            count, migrateErr = migrateCacheFrequent(data)
+          elseif fileInfo.file == "inv-cache-recent.state" then
+            count, migrateErr = migrateCacheRecent(data)
           elseif fileInfo.file == "inv-stats-spells.state" then
             count, migrateErr = migrateSpellBonuses(data)
           elseif fileInfo.file == "inv-config.state" then
@@ -600,9 +680,20 @@ function inv.migrate.execute()
         elseif r.desc == "Consumables" then
           tableName = "consumables"
           expected = r.count
-        elseif r.desc == "Equip bonuses" or r.desc == "Spell bonuses" then
-          -- Tracked separately for combined validation below
-          tableName = nil
+        elseif r.desc == "Custom cache" then
+          tableName = "cache_custom"
+          expected = r.count
+        elseif r.desc == "Frequent cache" then
+          tableName = "cache_frequent"
+          expected = r.count
+        elseif r.desc == "Recent cache" then
+          tableName = "cache_recent"
+          expected = r.count
+        elseif r.desc == "Spell bonuses" then
+          -- Direct validation against stat_bonuses (equip bonuses no longer migrated
+          -- post-v3.0097, so the row count matches the spell migration count directly)
+          tableName = "stat_bonuses"
+          expected = r.count
         elseif r.desc == "Config" then
           tableName = nil  -- Config uses INSERT OR REPLACE, count may not match exactly
         end
@@ -617,22 +708,6 @@ function inv.migrate.execute()
             validationPassed = false
           end
         end
-      end
-    end
-
-    -- Validate combined stat_bonuses count (equip + spell share the same table)
-    local expectedBonuses = 0
-    for _, r in ipairs(results) do
-      if (r.desc == "Equip bonuses" or r.desc == "Spell bonuses") and r.status == "OK" then
-        expectedBonuses = expectedBonuses + r.count
-      end
-    end
-    if expectedBonuses > 0 then
-      local actual, ok = validateCount("stat_bonuses", expectedBonuses)
-      if not ok then
-        dbot.warn(string.format("Validation failed for stat_bonuses: expected %d rows, found %d",
-                  expectedBonuses, actual))
-        validationPassed = false
       end
     end
 

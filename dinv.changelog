@@ -2,6 +2,30 @@
 dbot.changelog = {}
 
 
+dbot.changelog[3.0100] =
+{
+  { change = drlDbotChangeLogTypeFix,
+    desc   = [[Add three missing migrations and drop one that is now
+           obsolete.  "dinv migrate" inherited the original eight
+           state-file imports from aard_inventory but never covered
+           the three cache state files; the custom cache in
+           particular held user-set keywords (via "dinv key") and
+           organize queries (via "dinv organize"), so migrating
+           users silently lost manually-entered data.  Now imports:
+           inv-cache-custom.state into cache_custom, inv-cache-
+           frequent.state into cache_frequent (the v3.0084 table),
+           and inv-cache-recent.state into cache_recent.  Drop
+           inv-stats-equip.state: equipBonus was a deterministic
+           per-session cache before v3.0097 stopped persisting it,
+           so importing the old equip rows just added dead writes
+           that the next inv.statBonus.save would wipe.  Each new
+           migration validates row counts independently; the old
+           combined stat-bonuses validation collapses to a direct
+           check against stat_bonuses since only spell rows live
+           there now.]]
+  }
+}
+
 dbot.changelog[3.0099] =
 {
   { change = drlDbotChangeLogTypeFix,
