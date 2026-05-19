@@ -693,12 +693,12 @@ function inv.items.add(objId)
 end -- inv.items.add
 
 
-function inv.items.remove(objId)
+function inv.items.remove(objId, fromCascade)
   local retval = DRL_RET_SUCCESS
 
   local item = inv.items.getEntry(objId)
-  if (item == nil) then 
-    dbot.warn("inv.items.removeFailed to remove item " .. objId .. 
+  if (item == nil) then
+    dbot.warn("inv.items.removeFailed to remove item " .. objId ..
               " from inventory table because it is not in the table")
     return DRL_RET_MISSING_ENTRY
   end -- if
@@ -707,22 +707,36 @@ function inv.items.remove(objId)
   -- It would be nice if we could prune the search a bit and only do this if the item is a container.
   -- Unfortunately, we can't be guaranteed that the item is identified enough for us to know it is a
   -- container so we must do this for every item.  It's a bit more overhead...oh well.
+  --
+  -- The recursive call passes fromCascade=true so the recent-cache add below
+  -- doesn't skip frequent-cache items in this descent.  When a container is
+  -- dropped (e.g., on death) we need every nested item -- including potions and
+  -- other frequent-cache consumables -- in the recent cache so the container
+  -- restore walk in inv.items.add can re-link them.  Without this, a bag full
+  -- of healing potions came back empty after a death-retrieval cycle and the
+  -- only recovery was "dinv refresh all".
   for k,v in pairs(inv.items.table) do
     if (v[invFieldObjLoc] ~= nil) and (v[invFieldObjLoc] == objId) then
       dbot.debug("Removed item " .. k .. " from removed container " .. objId)
-      inv.items.remove(k)
+      inv.items.remove(k, true)
     end -- if
   end -- for
 
-  -- If the item is not in the frequent item cache, then cache the item in the "recently removed" item
-  -- cache in case we want to pick it up again soon.  We could duplicate things in both the frequent
-  -- and recent caches, but it helps keep things uncluttered if we don't add an item to the recent cache
-  -- if it is easily identified from the frequent cache.
+  -- Cache the removed item in the "recently removed" cache so we can re-identify
+  -- it cheaply if it comes back soon.  Top-level removes skip items already
+  -- represented in the frequent cache (potions, pills, scrolls, etc.) -- the
+  -- frequent cache has the identification template by name and the recent
+  -- cache would only duplicate it per-objId.  Cascade removes (fromCascade
+  -- true) DO cache every item regardless: the per-objId entry is the only
+  -- record of which container the item belonged to, and inv.items.add reads
+  -- cachedRecord.entry.objectLocation on container retrieval to re-link nested
+  -- items.
   local name = inv.items.getStatField(objId, invStatFieldName)
-  if (name ~= nil) and (inv.cache.get(inv.cache.frequent.table, name) == nil) then
+  if (name ~= nil) and (fromCascade or
+                        (inv.cache.get(inv.cache.frequent.table, name) == nil)) then
     retval = inv.cache.add(inv.cache.recent.table, objId)
     if (retval ~= DRL_RET_SUCCESS) then
-      dbot.warn("inv.items.remove: failed to cache \"" .. 
+      dbot.warn("inv.items.remove: failed to cache \"" ..
                 (inv.items.getField(objId, invFieldColorName) or "Unidentified") ..
                 "\" in recently removed item cache: " .. dbot.retval.getString(retval))
     end -- if

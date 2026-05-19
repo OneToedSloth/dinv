@@ -2,6 +2,30 @@
 dbot.changelog = {}
 
 
+dbot.changelog[3.0098] =
+{
+  { change = drlDbotChangeLogTypeFix,
+    desc   = [[Restore consumables inside dropped containers on
+           death-retrieval.  inv.items.remove deliberately skips the
+           recent-cache add for items whose name is already in the
+           frequent cache (potions, pills, scrolls, etc.) -- the
+           frequent cache has the identification template by name so
+           a duplicate per-objId entry in the recent cache normally
+           buys nothing.  But that skip also fired during the
+           container-cascade descent: when a bag with potions inside
+           was dropped (e.g., on death), the potions were removed
+           from inv.items.table and SQLite without ever entering the
+           recent cache, and the v3.0081 walk in inv.items.add could
+           not find them on retrieval -- the bag came back empty in
+           dinv's view and only "dinv refresh all" recovered.  Pass
+           a fromCascade flag through the recursive call so the
+           cascade descent caches every nested item regardless of
+           frequent-cache membership; top-level removes (consume,
+           drop, give, vault, etc.) keep the old skip so the
+           recent cache is not flooded by routine quaffs.]]
+  }
+}
+
 dbot.changelog[3.0097] =
 {
   { change = drlDbotChangeLogTypeFix,
