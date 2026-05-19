@@ -77,7 +77,14 @@ inv.cache.recent.name   = "recent"
 inv.cache.frequent.name = "frequent"
 inv.cache.custom.name   = "custom"
 
-inv.cache.recent.defaultNumEntries   = 1000
+-- Recent cache size needs to comfortably exceed the size of a typical full
+-- inventory so a single death-cascade can drop everything into the cache
+-- without LRU prune evicting items that haven't been picked up yet.  At ~2-3 KB
+-- per in-memory entry the 10,000-entry ceiling is ~25-30 MB of Lua heap when
+-- fully populated, which only matters during the brief window between death
+-- and corpse-retrieval; steady state is much smaller.  Frequent (by-name
+-- templates) and custom (per-objId keywords/organize) caches stay modest.
+inv.cache.recent.defaultNumEntries   = 10000
 inv.cache.frequent.defaultNumEntries = 100
 inv.cache.custom.defaultNumEntries   = 1500
 

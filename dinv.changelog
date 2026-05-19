@@ -2,6 +2,29 @@
 dbot.changelog = {}
 
 
+dbot.changelog[3.0099] =
+{
+  { change = drlDbotChangeLogTypeFix,
+    desc   = [[Bump the recent-cache default ceiling from 1,000 to
+           10,000 entries so a full-inventory death actually fits.
+           The 1,000-entry ceiling let LRU prune fire during a
+           death-cascade for any player carrying more than ~1,000
+           items (common for active players): the cascade adds each
+           dropped item to the recent cache, and once the threshold
+           was crossed the cache prune evicted 20% of the oldest
+           entries, including items dropped earlier in the same
+           cascade that hadn't been picked back up yet.  v3.0098's
+           container-restore walk then found no recent-cache entry
+           for the evicted items and only "dinv refresh all"
+           recovered them.  At ~2-3 KB per entry the new 10,000-
+           entry ceiling is ~25-30 MB of Lua heap when fully
+           populated -- a brief window between death and corpse
+           retrieval; steady state stays small.  Users who want a
+           different ceiling can still set it with the existing
+           cache-size knobs.]]
+  }
+}
+
 dbot.changelog[3.0098] =
 {
   { change = drlDbotChangeLogTypeFix,
