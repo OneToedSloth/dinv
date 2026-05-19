@@ -35,6 +35,7 @@ UNICODE_REPLACEMENTS = [
     ("’", "'"),    # right single quote
     ("“", '"'),    # left double quote
     ("”", '"'),    # right double quote
+    ("…", "..."),  # ellipsis
 ]
 
 # XML 1.0 forbidden control characters (everything below 0x20 except tab, LF, CR)
@@ -57,7 +58,7 @@ def read_file(path, error_if_contains_cdata=True):
     - Normalizes line endings to LF
     - Replaces known Unicode characters with ASCII equivalents
     - Strips XML 1.0 forbidden control characters (with warnings)
-    - Warns about any remaining non-ASCII characters
+    - Errors on any remaining non-ASCII characters
     """
     fname = os.path.basename(path)
 
@@ -88,16 +89,18 @@ def read_file(path, error_if_contains_cdata=True):
               file=sys.stderr)
         text = XML_FORBIDDEN.sub("", text)
 
-    # Warn about any remaining non-ASCII (not in our replacements list - unexpected)
+    # Abort on any remaining non-ASCII — they can't be encoded in iso-8859-1.
     non_ascii = [(i, c) for i, c in enumerate(text) if ord(c) > 127]
     if non_ascii:
-        print(f"WARNING [{fname}]: {len(non_ascii)} non-ASCII character(s) remaining:",
+        print(f"ERROR [{fname}] has {len(non_ascii)} non-ASCII character(s) which cannot be encoded in {ENCODING}:",
               file=sys.stderr)
-        for i, c in non_ascii[:3]:
+        for i, c in non_ascii[:10]:
             line = text[:i].count("\n") + 1
-            print(f"  line {line}: U+{ord(c):04X} {repr(c)}", file=sys.stderr)
-        if len(non_ascii) > 3:
-            print(f"  ... and {len(non_ascii) - 3} more", file=sys.stderr)
+            print(f"  {fname} line {line}: U+{ord(c):04X} {repr(c)}", file=sys.stderr)
+        if len(non_ascii) > 10:
+            print(f"  ... and {len(non_ascii) - 10} more", file=sys.stderr)
+        print(f"Teach build.py how to replace this char by adding it to UNICODE_REPLACEMENTS.", file=sys.stderr)
+        sys.exit(1)
 
     if error_if_contains_cdata and "]]>" in text:
         print(f"ERROR [{fname}]: content contains ']]>' which would break a CDATA block.",
