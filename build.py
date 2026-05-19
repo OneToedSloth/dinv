@@ -132,9 +132,12 @@ def build():
         if not os.path.exists(path):
             print(f"ERROR: missing module {module}", file=sys.stderr)
             sys.exit(1)
-        sep = "-" * 100
-        lua_parts.append(f"\n\n-- {sep}\n-- {module}\n-- {sep}\n\n")
+        bar = "=" * 80
+        label     = module.center(78)
+        end_label = f"end of {module}".center(78)
+        lua_parts.append(f"\n\n-- {bar}\n--{label}\n-- {bar}\n\n")
         lua_parts.append(read_file(path))
+        lua_parts.append(f"\n\n-- {bar}\n--{end_label}\n-- {bar}\n\n")
 
     all_lua = "".join(lua_parts)
 
