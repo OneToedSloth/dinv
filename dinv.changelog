@@ -2,6 +2,27 @@
 dbot.changelog = {}
 
 
+dbot.changelog[3.0102] =
+{
+  { change = drlDbotChangeLogTypeFix,
+    desc   = [[Fix "dinv migrate" silently discarding all migrated data
+           on the post-migration reload.  Migration writes straight to
+           SQLite, leaving the in-memory tables holding pre-migrate
+           (usually empty) state.  The reload used dbot.reload(), a full
+           plugin reload whose unload-time OnPluginSaveState flushed that
+           stale state back over the just-migrated database -- every
+           module's save() does DELETE FROM <table> then reinserts from
+           memory, so items, caches, priorities, sets, snapshots,
+           consumables and stat bonuses were all wiped roughly a second
+           after "Migration completed successfully!" printed.  Migrate now
+           reloads via inv.reload(drlDoNotSaveState), the same in-process,
+           no-save path "dinv backup restore" already uses after swapping
+           the database file out-of-band, so the migrated database is
+           preserved and reloaded from disk.  Thanks to OneToedSloth for
+           diagnosing the bug (GitHub PR #3).]]
+  }
+}
+
 dbot.changelog[3.0101] =
 {
   { change = drlDbotChangeLogTypeFix,

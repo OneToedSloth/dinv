@@ -758,7 +758,19 @@ function inv.migrate.execute()
 
   if retval == DRL_RET_SUCCESS then
     dbot.info("Reloading plugin to apply migrated data...")
-    dbot.reload()
+    -- Re-init in-process WITHOUT saving the current state.  The migration wrote
+    -- straight to SQLite, so the in-memory tables are still pre-migrate; a full
+    -- dbot.reload() would let the unload-time OnPluginSaveState flush that stale
+    -- state back over the freshly-migrated database via each module's DELETE-
+    -- and-reinsert save(), wiping everything that was just imported.  inv.reload
+    -- with drlDoNotSaveState skips the save and reloads from disk instead -- the
+    -- same path "dinv backup restore" uses after swapping the database file out-
+    -- of-band.
+    local reloadRetval = inv.reload(drlDoNotSaveState)
+    if (reloadRetval ~= DRL_RET_SUCCESS) then
+      dbot.warn("inv.migrate.execute: Failed to reload plugin after migration: " ..
+                dbot.retval.getString(reloadRetval))
+    end -- if
   end
 
   return retval
