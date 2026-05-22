@@ -4,11 +4,19 @@ dbot.changelog = {}
 
 dbot.changelog[3.0000] =
 {
+<<<<<<< HEAD
   { change = drlDbotChangeLogTypeFix,
     desc   = [[Fix loc/location search query to accept string location names
            (e.g. "loc inventory", "loc head").
            Previously only numeric container IDs were matched; string values
            silently matched everything.]]
+=======
+  { change = drlDbotChangeLogTypeNew,
+    desc   = [[Add metalweapon priority scoring field.  Set to a positive
+           weight to favor metal weapons in a priority (e.g. for blacksmith
+           builds).  Non-weapon items and weapons with unknown material are
+           unaffected.]]
+>>>>>>> pr/metalweapon-field
   }
 }
 
